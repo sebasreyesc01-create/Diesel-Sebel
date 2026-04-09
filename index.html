@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Control de Diesel - Reportes Descargables</title>
+    <style>
+        :root { --primary: #2c3e50; --accent: #e67e22; --success: #27ae60; --danger: #e74c3c; --gray: #95a5a6; }
+        body { font-family: 'Segoe UI', sans-serif; background-color: #f0f3f4; margin: 0; padding: 20px; }
+        .container { max-width: 1400px; margin: auto; background: white; padding: 25px; border-radius: 12px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
+        .hidden { display: none; }
+        h1, h2 { color: var(--primary); text-align: center; margin-top: 0; }
+        
+        /* Operadores */
+        .operator-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 15px; margin-top: 20px; }
+        .op-card { background: var(--primary); color: white; padding: 25px; text-align: center; border-radius: 8px; cursor: pointer; position: relative; transition: 0.3s; }
+        .op-card:hover { background: #34495e; transform: translateY(-3px); }
+        .delete-op-btn { position: absolute; top: 5px; right: 5px; background: rgba(255,255,255,0.2); border-radius: 50%; width: 25px; height: 25px; border: none; color: white; cursor: pointer; }
+
+        /* Tabla y Formulario */
+        .table-container { overflow-x: auto; margin-top: 20px; border-radius: 8px; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.85em; min-width: 1200px; }
+        th, td { border: 1px solid #dee2e6; padding: 12px; text-align: center; }
+        th { background: var(--primary); color: white; }
+        
+        .form-box { background: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 25px; border: 1px solid #ddd; }
+        .grid-inputs { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; }
+        label { display: block; font-size: 0.75em; font-weight: bold; margin-bottom: 5px; color: #555; }
+        input, select { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+        
+        .btn { padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; color: white; }
+        .btn-main { background: var(--success); width: 100%; margin-top: 15px; }
+        .btn-danger { background: var(--danger); }
+        .btn-warning { background: var(--accent); }
+        .btn-gray { background: var(--gray); }
+        .btn-download { background: #2980b9; } /* Color azul para descarga */
+        .badge { padding: 5px 10px; border-radius: 4px; color: white; font-weight: bold; }
+
+        .action-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <!-- PANTALLA 1: GESTIÓN DE OPERADORES -->
+    <div id="screen-home">
+        <h1>Sistema de Diesel</h1>
+        <div class="form-box" style="max-width: 500px; margin: auto; text-align: center;">
+            <label>Registrar Nuevo Operador:</label>
+            <input type="text" id="new-op-name" placeholder="Nombre completo">
+            <button class="btn btn-main" onclick="addOperator()">+ Agregar a la Lista</button>
+        </div>
+        <div class="operator-grid" id="op-container"></div>
+    </div>
+
+    <!-- PANTALLA 2: BITÁCORA -->
+    <div id="screen-details" class="hidden">
+        <div class="action-header">
+            <button class="btn btn-gray" onclick="showScreen('home')">← Volver</button>
+            <div style="display: flex; gap: 10px;">
+                <button class="btn btn-download" onclick="downloadCSV()">📥 Descargar Bitácora (Excel)</button>
+                <button class="btn btn-danger" onclick="clearAllData()">⚠️ Vaciar Todo</button>
+            </div>
+        </div>
+        
+        <h2 id="title-op">Bitácora</h2>
+        
+        <div class="form-box">
+            <h3>Nueva Salida Manual</h3>
+            <div class="grid-inputs">
+                <div><label>Unidad</label><input type="text" id="unit"></div>
+                <div><label>Motor</label><input type="text" id="engine"></div>
+                <div><label>Destino</label><input type="text" id="dest"></div>
+                <div><label>Cliente</label><input type="text" id="client"></div>
+                <div>
+                    <label>Tipo de Carga</label>
+                    <select id="load">
+                        <option value="Sencilla">Sencilla</option>
+                        <option value="Full">Full</option>
+                    </select>
+                </div>
+            </div>
+            <button class="btn btn-main" onclick="addRecord()">Registrar Salida</button>
+        </div>
+
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Fecha Salida</th>
+                        <th>Unidad/Motor</th>
+                        <th>Destino/Cliente</th>
+                        <th>Carga</th>
+                        <th>Regreso</th>
+                        <th>KM</th>
+                        <th>V. Máx / RPM</th>
+                        <th>ECM / Real</th>
+                        <th>Dif %</th>
+                        <th>Acción</th>
+                    </tr>
+                </thead>
+                <tbody id="table-body"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- PANTALLA 3: CIERRE DE VIAJE -->
+    <div id="screen-return" class="hidden">
+        <button class="btn btn-gray" onclick="showScreen('details')">← Cancelar</button>
+        <h2>Cierre de Viaje y Rendimiento</h2>
+        <div class="form-box">
+            <div class="grid-inputs" style="grid-template-columns: 1fr 1fr;">
+                <div><label>KM Totales</label><input type="number" id="ret-km"></div>
+                <div><label>V. Máx (km/h)</label><input type="number" id="ret-vel"></div>
+                <div><label>RPM Máximas</label><input type="number" id="ret-rpm"></div>
+                <div><label>Litros ECM</label><input type="number" id="ret-ecm" step="0.1"></div>
+                <div><label>Litros Reales</label><input type="number" id="ret-filled" step="0.1"></div>
+            </div>
+            <button class="btn btn-main" style="background: var(--primary);" onclick="finalizeTrip()">Finalizar Viaje</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    let operators = JSON.parse(localStorage.getItem('diesel_final_ops')) || [];
+    let currentOp = "";
+    let activeId = null;
+
+    function showScreen(s) {
+        document.getElementById('screen-home').classList.add('hidden');
+        document.getElementById('screen-details').classList.add('hidden');
+        document.getElementById('screen-return').classList.add('hidden');
+        document.getElementById('screen-'+s).classList.remove('hidden');
+    }
+
+    // --- GESTIÓN OPERADORES ---
+    function addOperator() {
+        const name = document.getElementById('new-op-name').value.trim();
+        if(name && !operators.includes(name)) {
+            operators.push(name);
+            localStorage.setItem('diesel_final_ops', JSON.stringify(operators));
+            renderOperators();
+            document.getElementById('new-op-name').value = '';
+        }
+    }
+
+    function deleteOperator(event, name) {
+        event.stopPropagation();
+        if(confirm(`¿Borrar a ${name} y toda su base de datos?`)) {
+            operators = operators.filter(o => o !== name);
+            localStorage.setItem('diesel_final_ops', JSON.stringify(operators));
+            localStorage.removeItem(`data_fin_${name}`);
+            renderOperators();
+        }
+    }
+
+    function renderOperators() {
+        const container = document.getElementById('op-container');
+        container.innerHTML = '';
+        operators.forEach(o => {
+            const card = document.createElement('div');
+            card.className = 'op-card';
+            card.innerHTML = `<button class="delete-op-btn" onclick="deleteOperator(event, '${o}')">×</button><strong>${o}</strong>`;
+            card.onclick = () => { currentOp = o; showScreen('details'); document.getElementById('title-op').innerText = `Operador: ${o}`; renderTable(); };
+            container.appendChild(card);
+        });
+    }
+
+    // --- BITÁCORA ---
+    function addRecord() {
+        const r = {
+            id: Date.now(),
+            dateOut: new Date().toLocaleString(),
+            unit: document.getElementById('unit').value,
+            engine: document.getElementById('engine').value,
+            dest: document.getElementById('dest').value,
+            client: document.getElementById('client').value,
+            load: document.getElementById('load').value,
+            dateIn: '-', km: '-', vel: '-', rpm: '-', ecm: 0, filled: 0, dif: '-', status: 'PENDIENTE'
+        };
+        if(!r.unit || !r.dest) return alert("Faltan datos");
+        let data = JSON.parse(localStorage.getItem(`data_fin_${currentOp}`)) || [];
+        data.unshift(r);
+        localStorage.setItem(`data_fin_${currentOp}`, JSON.stringify(data));
+        ['unit', 'engine', 'dest', 'client'].forEach(id => document.getElementById(id).value = '');
+        renderTable();
+    }
+
+    function renderTable() {
+        const tbody = document.getElementById('table-body');
+        tbody.innerHTML = '';
+        const data = JSON.parse(localStorage.getItem(`data_fin_${currentOp}`)) || [];
+        data.forEach(r => {
+            const isAlert = r.dif !== '-' && parseFloat(r.dif) > 3;
+            const badgeClass = r.dif === '-' ? '' : (isAlert ? 'btn-danger' : 'btn-success');
+            tbody.innerHTML += `
+                <tr>
+                    <td>${r.dateOut}</td>
+                    <td>${r.unit}<br><small>${r.engine}</small></td>
+                    <td>${r.dest}<br><small>${r.client}</small></td>
+                    <td>${r.load}</td>
+                    <td>${r.dateIn}</td>
+                    <td>${r.km}</td>
+                    <td>${r.vel} / ${r.rpm}</td>
+                    <td>${r.ecm} / ${r.filled}</td>
+                    <td><span class="badge ${badgeClass}">${r.dif}${r.dif !== '-' ? '%' : ''}</span></td>
+                    <td>
+                        <div style="display:flex; gap:5px; justify-content:center">
+                            ${r.status === 'PENDIENTE' ? `<button class="btn btn-warning" onclick="openReturn(${r.id})">Cerrar</button>` : '✅'}
+                            <button class="btn btn-danger" onclick="deleteTrip(${r.id})">Eliminar</button>
+                        </div>
+                    </td>
+                </tr>`;
+        });
+    }
+
+    // --- FUNCIÓN DE DESCARGA CSV ---
+    function downloadCSV() {
+        const data = JSON.parse(localStorage.getItem(`data_fin_${currentOp}`)) || [];
+        if (data.length === 0) return alert("No hay datos para descargar");
+
+        // Encabezados
+        let csvContent = "Fecha Salida,Unidad,Motor,Destino,Cliente,Carga,Fecha Regreso,KM Recorridos,Vel Max,RPM Max,Litros ECM,Litros Reales,Diferencia %\n";
+
+        // Filas
+        data.forEach(r => {
+            let row = [
+                `"${r.dateOut}"`, `"${r.unit}"`, `"${r.engine}"`, `"${r.dest}"`, `"${r.client}"`,
+                `"${r.load}"`, `"${r.dateIn}"`, `"${r.km}"`, `"${r.vel}"`, `"${r.rpm}"`,
+                `"${r.ecm}"`, `"${r.filled}"`, `"${r.dif}%"`
+            ].join(",");
+            csvContent += row + "\n";
+        });
+
+        // Crear archivo y descargar
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement("a");
+        const url = URL.createObjectURL(blob);
+        link.setAttribute("href", url);
+        link.setAttribute("download", `Bitacora_${currentOp.replace(/\s+/g, '_')}.csv`);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+
+    function deleteTrip(id) {
+        if(confirm("¿Eliminar registro?")) {
+            let data = JSON.parse(localStorage.getItem(`data_fin_${currentOp}`));
+            data = data.filter(x => x.id !== id);
+            localStorage.setItem(`data_fin_${currentOp}`, JSON.stringify(data));
+            renderTable();
+        }
+    }
+
+    function clearAllData() {
+        if(confirm("¿Borrar todos los registros de este operador?")) {
+            localStorage.setItem(`data_fin_${currentOp}`, JSON.stringify([]));
+            renderTable();
+        }
+    }
+
+    function openReturn(id) { activeId = id; showScreen('return'); }
+
+    function finalizeTrip() {
+        const km = document.getElementById('ret-km').value;
+        const ecm = parseFloat(document.getElementById('ret-ecm').value);
+        const filled = parseFloat(document.getElementById('ret-filled').value);
+        if(!km || !ecm || !filled) return alert("Completa los datos");
+        let data = JSON.parse(localStorage.getItem(`data_fin_${currentOp}`));
+        const idx = data.findIndex(x => x.id === activeId);
+        data[idx] = {
+            ...data[idx],
+            dateIn: new Date().toLocaleString(),
+            km, vel: document.getElementById('ret-vel').value, rpm: document.getElementById('ret-rpm').value,
+            ecm, filled, dif: ((Math.abs(ecm - filled) / ecm) * 100).toFixed(2), status: 'CERRADO'
+        };
+        localStorage.setItem(`data_fin_${currentOp}`, JSON.stringify(data));
+        showScreen('details');
+        renderTable();
+    }
+
+    renderOperators();
+</script>
+</body>
+</html>
