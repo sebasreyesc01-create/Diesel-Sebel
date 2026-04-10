@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Control de Diesel - Pro</title>
+    <style>
+        :root { --primary: #2c3e50; --accent: #e67e22; --success: #27ae60; --danger: #e74c3c; --gray: #95a5a6; --info: #2980b9; }
+        body { font-family: 'Segoe UI', sans-serif; background-color: #f0f3f4; margin: 0; padding: 20px; }
+        .container { max-width: 100%; margin: auto; background: white; padding: 25px; border-radius: 12px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
+        .hidden { display: none; }
+        
+        .operator-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 15px; margin-top: 20px; }
+        .op-card { position: relative; background: var(--primary); color: white; padding: 30px 20px; text-align: center; border-radius: 8px; cursor: pointer; transition: 0.3s; }
+        .op-card:hover { background: #34495e; }
+        
+        .delete-op-btn { position: absolute; top: 8px; right: 8px; background: rgba(255,255,255,0.2); border: none; color: white; border-radius: 50%; width: 24px; height: 24px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+        .delete-op-btn:hover { background: var(--danger); }
+
+        .table-container { overflow-x: auto; margin-top: 20px; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.8em; min-width: 1500px; }
+        th, td { border: 1px solid #dee2e6; padding: 8px; text-align: center; }
+        th { background: var(--primary); color: white; }
+        
+        .form-box { background: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 25px; border: 1px solid #ddd; }
+        .grid-inputs { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 10px; }
+        
+        .btn { padding: 8px 12px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; color: white; font-size: 0.8em; }
+        .btn-main { background: var(--success); width: 100%; margin-top: 15px; }
+        .btn-danger { background: var(--danger); }
+        .btn-warning { background: var(--accent); }
+        .btn-info { background: var(--info); }
+        .btn-gray { background: var(--gray); }
+        
+        .badge { padding: 4px 8px; border-radius: 4px; color: white; font-weight: bold; display: inline-block; min-width: 50px; }
+        .header-flex { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        input, select { padding: 8px; border: 1px solid #ccc; border-radius: 4px; width: 100%; box-sizing: border-box; }
+        tr.enganche-row { background-color: #fff9c4 !important; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div id="screen-home">
+        <h1 style="text-align:center">Control de Diesel</h1>
+        <div class="form-box" style="max-width: 400px; margin: auto; text-align: center;">
+            <input type="text" id="new-op-name" placeholder="Nombre del Operador">
+            <button class="btn btn-main" onclick="addOperator()">+ Registrar Operador</button>
+        </div>
+        <div class="operator-grid" id="op-container"></div>
+    </div>
+
+    <div id="screen-details" class="hidden">
+        <div class="header-flex">
+            <button class="btn btn-gray" onclick="showScreen('home')">← Volver</button>
+            <div style="display: flex; gap: 10px;">
+                <button class="btn btn-info" onclick="downloadCSV()">Descargar CSV</button>
+                <button class="btn btn-danger" onclick="clearAllData()">Limpiar Registro</button>
+            </div>
+        </div>
+        
+        <h2 id="title-op">Bitácora</h2>
+        
+        <div class="form-box">
+            <div class="grid-inputs">
+                <div><label>Folio</label><input type="text" id="folio"></div>
+                <div><label>Unidad</label><input type="text" id="unit"></div>
+                <div><label>Motor</label><input type="text" id="engine"></div>
+                <div><label>Destino</label><input type="text" id="dest"></div>
+                <div><label>Cliente</label><input type="text" id="client"></div>
+                <div>
+                    <label>Carga</label>
+                    <select id="load"><option value="Sencilla">Sencillo</option><option value="Full">Full</option></select>
+                </div>
+                <div>
+                    <label>Tipo</label>
+                    <select id="trip-type">
+                        <option value="completo">Viaje Completo</option>
+                        <option value="enganche">Enganche</option>
+                    </select>
+                </div>
+            </div>
+            <button class="btn btn-main" onclick="addRecord()">Registrar Salida</button>
+        </div>
+
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Folio</th>
+                        <th>Salida</th>
+                        <th>Unidad / Motor</th>
+                        <th>Destino / Cliente</th>
+                        <th>Carga</th>
+                        <th>Peso</th>
+                        <th>Regreso ECM</th>
+                        <th>KM</th>
+                        <th>Hrs Trab. / Ralentí</th>
+                        <th>V. Máx / RPM</th>
+                        <th>ECM / Real</th>
+                        <th>Dif Litros</th> <!-- NUEVA COLUMNA -->
+                        <th>Dif %</th>
+                        <th>Acción</th>
+                    </tr>
+                </thead>
+                <tbody id="table-body"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <div id="screen-return" class="hidden">
+        <button class="btn btn-gray" onclick="showScreen('details')">← Volver</button>
+        <h2>Cerrar Viaje / Datos de ECM</h2>
+        <div class="form-box">
+            <div class="grid-inputs">
+                <div><label>KM Final</label><input type="number" id="ret-km"></div>
+                <div><label>Hrs Trab.</label><input type="number" id="ret-hrs" step="0.1"></div>
+                <div><label>Hrs Ralentí</label><input type="number" id="ret-idle" step="0.1"></div>
+                <div><label>V. Máx</label><input type="number" id="ret-vel"></div>
+                <div><label>RPM Máx</label><input type="number" id="ret-rpm"></div>
+                <div><label>Litros ECM</label><input type="number" id="ret-ecm" step="0.1"></div>
+                <div><label>Litros Real</label><input type="number" id="ret-filled" step="0.1"></div>
+            </div>
+            <button class="btn btn-main" style="background: var(--primary);" onclick="finalizeTrip()">Guardar y Calcular Diferencia</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    let operators = JSON.parse(localStorage.getItem('diesel_v4_ops')) || [];
+    let currentOp = "";
+    let activeId = null;
+
+    function showScreen(s) {
+        document.querySelectorAll('.container > div').forEach(d => d.classList.add('hidden'));
+        document.getElementById('screen-'+s).classList.remove('hidden');
+    }
+
+    function addOperator() {
+        const name = document.getElementById('new-op-name').value.trim();
+        if(name && !operators.includes(name)) {
+            operators.push(name);
+            localStorage.setItem('diesel_v4_ops', JSON.stringify(operators));
+            renderOperators();
+            document.getElementById('new-op-name').value = '';
+        }
+    }
+
+    function deleteOperator(event, name) {
+        event.stopPropagation();
+        if(confirm(`¿Borrar a ${name}?`)) {
+            operators = operators.filter(o => o !== name);
+            localStorage.setItem('diesel_v4_ops', JSON.stringify(operators));
+            localStorage.removeItem(`data_v4_${name}`);
+            renderOperators();
+        }
+    }
+
+    function renderOperators() {
+        const container = document.getElementById('op-container');
+        container.innerHTML = '';
+        operators.forEach(o => {
+            const card = document.createElement('div');
+            card.className = 'op-card';
+            card.innerHTML = `<button class="delete-op-btn" onclick="deleteOperator(event, '${o}')">×</button><strong>${o}</strong>`;
+            card.onclick = () => { currentOp = o; showScreen('details'); document.getElementById('title-op').innerText = `Operador: ${o}`; renderTable(); };
+            container.appendChild(card);
+        });
+    }
+
+    function addRecord() {
+        const r = {
+            id: Date.now(),
+            folio: document.getElementById('folio').value.trim() || '-',
+            dateOut: new Date().toLocaleString(),
+            unit: document.getElementById('unit').value || '-',
+            engine: document.getElementById('engine').value || '-',
+            dest: document.getElementById('dest').value || '-',
+            client: document.getElementById('client').value || '-',
+            load: document.getElementById('load').value,
+            type: document.getElementById('trip-type').value, 
+            dateIn: '-', km: '-', hrs: '-', idle: '-', vel: '-', rpm: '-', ecm: 0, filled: 0, dif: '-', difLitros: '-', status: 'PENDIENTE'
+        };
+
+        if(document.getElementById('unit').value === "") return alert("La Unidad es obligatoria");
+
+        let data = JSON.parse(localStorage.getItem(`data_v4_${currentOp}`)) || [];
+        data.unshift(r);
+        localStorage.setItem(`data_v4_${currentOp}`, JSON.stringify(data));
+        
+        ['folio', 'unit', 'engine', 'dest', 'client'].forEach(id => document.getElementById(id).value = '');
+        renderTable();
+    }
+
+    function renderTable() {
+        const tbody = document.getElementById('table-body');
+        tbody.innerHTML = '';
+        const data = JSON.parse(localStorage.getItem(`data_v4_${currentOp}`)) || [];
+
+        data.forEach(r => {
+            let badgeClass = 'btn-gray';
+            if (r.dif !== '-') {
+                const val = parseFloat(r.dif);
+                if (val > 3) badgeClass = 'btn-danger';
+                else if (val < -3) badgeClass = 'btn-warning';
+                else badgeClass = 'btn-success';
+            }
+            
+            const rowClass = (r.type === 'enganche') ? 'enganche-row' : '';
+            
+            tbody.innerHTML += `
+                <tr class="${rowClass}">
+                    <td contenteditable="true"><b>${r.folio}</b></td>
+                    <td contenteditable="true">${r.dateOut}</td>
+                    <td>${r.unit} / ${r.engine}</td>
+                    <td>${r.dest}<br><small>${r.client}</small></td>
+                    <td>${r.load} ${r.type === 'enganche' ? '<strong>(E)</strong>' : ''}</td>
+                    <td>
+                        <input type="number" class="inline-edit" style="width:60px" value="${r.weight || 0}" 
+                        onchange="updateWeight(${r.id}, this.value)" step="0.1">
+                    </td>
+                    <td contenteditable="true">${r.dateIn}</td>
+                    <td>${r.km}</td>
+                    <td>${r.hrs} / ${r.idle}</td>
+                    <td>${r.vel} / ${r.rpm}</td>
+                    <td>${r.ecm} / ${r.filled}</td>
+                    <td style="font-weight:bold; color:${r.difLitros > 0 ? 'red' : 'green'}">${r.difLitros !== '-' ? r.difLitros + ' L' : '-'}</td>
+                    <td><span class="badge ${badgeClass}">${r.dif}${r.dif !== '-' ? '%' : ''}</span></td>
+                    <td>
+                        <div style="display:flex; gap:3px; justify-content:center;">
+                            ${r.status === 'PENDIENTE' ? `<button class="btn btn-warning" onclick="openReturn(${r.id})">Cerrar</button>` : ''}
+                            <button class="btn btn-danger" onclick="deleteTrip(${r.id})">×</button>
+                        </div>
+                    </td>
+                </tr>`;
+        });
+    }
+
+    function openReturn(id) { activeId = id; showScreen('return'); }
+
+    function finalizeTrip() {
+        const ecm = parseFloat(document.getElementById('ret-ecm').value) || 0;
+        const filled = parseFloat(document.getElementById('ret-filled').value) || 0;
+        
+        let data = JSON.parse(localStorage.getItem(`data_v4_${currentOp}`));
+        const idx = data.findIndex(x => x.id === activeId);
+        const currentRecord = data[idx];
+
+        let finalResult = 0;
+        let litrosDif = (filled - ecm).toFixed(2); // CALCULO DIFERENCIA LITROS
+
+        if (currentRecord.type === 'enganche') {
+            finalResult = 0;
+            litrosDif = 0;
+        } 
+        else if (ecm === 0 && filled === 0) {
+            return alert("Ingresa los datos de combustible.");
+        }
+        else if (ecm < filled) {
+            finalResult = (filled - ecm) * 0.03;
+        } else if (filled < ecm) {
+            finalResult = ((filled - ecm) / ecm) * 100;
+        } else {
+            finalResult = 0;
+        }
+
+        data[idx] = {
+            ...data[idx],
+            dateIn: new Date().toLocaleString(),
+            km: document.getElementById('ret-km').value || '-',
+            hrs: document.getElementById('ret-hrs').value || '-',
+            idle: document.getElementById('ret-idle').value || '-',
+            vel: document.getElementById('ret-vel').value || '-',
+            rpm: document.getElementById('ret-rpm').value || '-',
+            ecm: ecm, 
+            filled: filled,
+            difLitros: litrosDif, // GUARDAR DIFERENCIA LITROS
+            dif: (currentRecord.type === 'enganche') ? '0.00' : finalResult.toFixed(2),
+            status: 'CERRADO'
+        };
+
+        localStorage.setItem(`data_v4_${currentOp}`, JSON.stringify(data));
+        showScreen('details');
+        renderTable();
+        
+        ['ret-km', 'ret-hrs', 'ret-idle', 'ret-vel', 'ret-rpm', 'ret-ecm', 'ret-filled'].forEach(id => document.getElementById(id).value = '');
+    }
+
+    function deleteTrip(id) { if(confirm("¿Eliminar registro?")) { let data = JSON.parse(localStorage.getItem(`data_v4_${currentOp}`)); data = data.filter(x => x.id !== id); localStorage.setItem(`data_v4_${currentOp}`, JSON.stringify(data)); renderTable(); } }
+    
+    function clearAllData() { if(confirm("¿Borrar toda la bitácora de este operador?")) { localStorage.setItem(`data_v4_${currentOp}`, JSON.stringify([])); renderTable(); } }
+
+    function downloadCSV() {
+        const data = JSON.parse(localStorage.getItem(`data_v4_${currentOp}`)) || [];
+        if (data.length === 0) return alert("No hay datos para exportar");
+
+        let csv = "Folio,Salida,Unidad,Motor,Destino,Cliente,Carga,Tipo,Peso,Regreso ECM,KM,Hrs,Ralenti,V_Max,RPM,Litros_ECM,Litros_Real,Dif_Litros,Dif_Porcentual\n";
+        
+        data.forEach(r => {
+            const row = [
+                r.folio, r.dateOut, r.unit, r.engine, r.dest, r.client, r.load,
+                r.type === 'enganche' ? 'Enganche' : 'Viaje Completo',
+                r.weight || '0', r.dateIn, r.km, r.hrs, r.idle, r.vel, r.rpm, r.ecm, r.filled,
+                r.difLitros, r.dif + "%"
+            ];
+            csv += row.map(field => `"${field}"`).join(",") + "\n";
+        });
+        const blob = new Blob(["\ufeff" + csv], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement("a");
+        const fileName = `Bitacora_${currentOp}_${new Date().toLocaleDateString()}.csv`;
+        link.href = URL.createObjectURL(blob);
+        link.download = fileName;
+        link.click();
+    }
+
+    renderOperators();
+</script>
+</body>
+</html>
