@@ -248,7 +248,7 @@
             const row = document.createElement('tr');
             row.className = rowClass;
             row.innerHTML = `
-                <td contenteditable="true"><b>${r.folio}</b></td>
+                <td class="editable-cell" onclick="editCell(${r.id}, 'folio', '${r.folio}', this)"><b>${r.folio}</b></td>
                 <td class="editable-cell" onclick="editCell(${r.id}, 'dateOut', '${r.dateOut}', this)">${r.dateOut}</td>
                 <td>${r.unit} / ${r.engine}</td>
                 <td>${r.dest}<br><small>${r.client}</small></td>
