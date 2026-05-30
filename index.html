@@ -208,9 +208,18 @@
 
     function editCell(id, field, currentValue, cellElement) {
         const input = document.createElement('input');
-        input.type = field.includes('date') || field === 'dateOut' || field === 'dateIn' ? 'text' : 'number';
+        
+        // Configurar el tipo de input según el campo
+        if (field === 'folio') {
+            input.type = 'text';
+        } else if (field.includes('date') || field === 'dateOut' || field === 'dateIn') {
+            input.type = 'text';
+        } else {
+            input.type = 'number';
+            input.step = '0.1';
+        }
+        
         input.value = currentValue;
-        input.step = '0.1';
         
         cellElement.innerHTML = '';
         cellElement.appendChild(input);
