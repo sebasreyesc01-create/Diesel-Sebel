@@ -36,6 +36,10 @@
         .header-flex { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
         input, select { padding: 8px; border: 1px solid #ccc; border-radius: 4px; width: 100%; box-sizing: border-box; }
         tr.enganche-row { background-color: #fff9c4 !important; }
+        
+        .editable-cell { cursor: pointer; padding: 4px; border-radius: 3px; }
+        .editable-cell:hover { background-color: #fff3cd; }
+        .editable-cell input { width: 100%; padding: 4px; border: 2px solid var(--info); border-radius: 3px; }
     </style>
 </head>
 <body>
@@ -98,7 +102,7 @@
                         <th>Hrs Trab. / Ralentí</th>
                         <th>V. Máx / RPM</th>
                         <th>ECM / Real</th>
-                        <th>Dif Litros</th> <!-- NUEVA COLUMNA -->
+                        <th>Dif Litros</th>
                         <th>Dif %</th>
                         <th>Acción</th>
                     </tr>
@@ -179,6 +183,7 @@
             client: document.getElementById('client').value || '-',
             load: document.getElementById('load').value,
             type: document.getElementById('trip-type').value, 
+            weight: 0,
             dateIn: '-', km: '-', hrs: '-', idle: '-', vel: '-', rpm: '-', ecm: 0, filled: 0, dif: '-', difLitros: '-', status: 'PENDIENTE'
         };
 
@@ -190,6 +195,38 @@
         
         ['folio', 'unit', 'engine', 'dest', 'client'].forEach(id => document.getElementById(id).value = '');
         renderTable();
+    }
+
+    function updateField(id, field, value) {
+        let data = JSON.parse(localStorage.getItem(`data_v4_${currentOp}`));
+        const idx = data.findIndex(x => x.id === id);
+        if (idx !== -1) {
+            data[idx][field] = value;
+            localStorage.setItem(`data_v4_${currentOp}`, JSON.stringify(data));
+        }
+    }
+
+    function editCell(id, field, currentValue, cellElement) {
+        const input = document.createElement('input');
+        input.type = field.includes('date') || field === 'dateOut' || field === 'dateIn' ? 'text' : 'number';
+        input.value = currentValue;
+        input.step = '0.1';
+        
+        cellElement.innerHTML = '';
+        cellElement.appendChild(input);
+        input.focus();
+        input.select();
+
+        const saveEdit = () => {
+            const newValue = input.value || currentValue;
+            updateField(id, field, newValue);
+            renderTable();
+        };
+
+        input.addEventListener('blur', saveEdit);
+        input.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') saveEdit();
+        });
     }
 
     function renderTable() {
@@ -208,85 +245,94 @@
             
             const rowClass = (r.type === 'enganche') ? 'enganche-row' : '';
             
-            tbody.innerHTML += `
-                <tr class="${rowClass}">
-                    <td contenteditable="true"><b>${r.folio}</b></td>
-                    <td contenteditable="true">${r.dateOut}</td>
-                    <td>${r.unit} / ${r.engine}</td>
-                    <td>${r.dest}<br><small>${r.client}</small></td>
-                    <td>${r.load} ${r.type === 'enganche' ? '<strong>(E)</strong>' : ''}</td>
-                    <td>
-                        <input type="number" class="inline-edit" style="width:60px" value="${r.weight || 0}" 
-                        onchange="updateWeight(${r.id}, this.value)" step="0.1">
-                    </td>
-                    <td contenteditable="true">${r.dateIn}</td>
-                    <td>${r.km}</td>
-                    <td>${r.hrs} / ${r.idle}</td>
-                    <td>${r.vel} / ${r.rpm}</td>
-                    <td>${r.ecm} / ${r.filled}</td>
-                    <td style="font-weight:bold; color:${r.difLitros > 0 ? 'red' : 'green'}">${r.difLitros !== '-' ? r.difLitros + ' L' : '-'}</td>
-                    <td><span class="badge ${badgeClass}">${r.dif}${r.dif !== '-' ? '%' : ''}</span></td>
-                    <td>
-                        <div style="display:flex; gap:3px; justify-content:center;">
-                            ${r.status === 'PENDIENTE' ? `<button class="btn btn-warning" onclick="openReturn(${r.id})">Cerrar</button>` : ''}
-                            <button class="btn btn-danger" onclick="deleteTrip(${r.id})">×</button>
-                        </div>
-                    </td>
-                </tr>`;
+            const row = document.createElement('tr');
+            row.className = rowClass;
+            row.innerHTML = `
+                <td contenteditable="true"><b>${r.folio}</b></td>
+                <td class="editable-cell" onclick="editCell(${r.id}, 'dateOut', '${r.dateOut}', this)">${r.dateOut}</td>
+                <td>${r.unit} / ${r.engine}</td>
+                <td>${r.dest}<br><small>${r.client}</small></td>
+                <td>${r.load} ${r.type === 'enganche' ? '<strong>(E)</strong>' : ''}</td>
+                <td class="editable-cell" onclick="editCell(${r.id}, 'weight', '${r.weight || 0}', this)">${r.weight || 0}</td>
+                <td class="editable-cell" onclick="editCell(${r.id}, 'dateIn', '${r.dateIn}', this)">${r.dateIn}</td>
+                <td>${r.km}</td>
+                <td>${r.hrs} / ${r.idle}</td>
+                <td>${r.vel} / ${r.rpm}</td>
+                <td>${r.ecm} / ${r.filled}</td>
+                <td style="font-weight:bold; color:${r.difLitros > 0 ? 'red' : 'green'}">${r.difLitros !== '-' ? r.difLitros + ' L' : '-'}</td>
+                <td><span class="badge ${badgeClass}">${r.dif}${r.dif !== '-' ? '%' : ''}</span></td>
+                <td>
+                    <div style="display:flex; gap:3px; justify-content:center;">
+                        ${r.status === 'PENDIENTE' ? `<button class="btn btn-warning" onclick="openReturn(${r.id})">Cerrar</button>` : ''}
+                        <button class="btn btn-danger" onclick="deleteTrip(${r.id})">×</button>
+                    </div>
+                </td>
+            `;
+            tbody.appendChild(row);
         });
     }
 
     function openReturn(id) { activeId = id; showScreen('return'); }
 
-function finalizeTrip() {
-    const ecm = parseFloat(document.getElementById('ret-ecm').value) || 0;
-    const filled = parseFloat(document.getElementById('ret-filled').value) || 0;
-    
-    let data = JSON.parse(localStorage.getItem(`data_v4_${currentOp}`));
-    const idx = data.findIndex(x => x.id === activeId);
-    const currentRecord = data[idx];
+    function finalizeTrip() {
+        const ecm = parseFloat(document.getElementById('ret-ecm').value) || 0;
+        const filled = parseFloat(document.getElementById('ret-filled').value) || 0;
+        
+        let data = JSON.parse(localStorage.getItem(`data_v4_${currentOp}`));
+        const idx = data.findIndex(x => x.id === activeId);
+        const currentRecord = data[idx];
 
-    let finalResult = 0;
-    let litrosDif = (filled - ecm).toFixed(2);
+        let finalResult = 0;
+        let litrosDif = (filled - ecm).toFixed(2);
 
-    if (currentRecord.type === 'enganche') {
-        finalResult = 0;
-        litrosDif = 0;
-    } 
-    else if (ecm === 0 && filled === 0) {
-        return alert("Ingresa los datos de combustible.");
+        if (currentRecord.type === 'enganche') {
+            finalResult = 0;
+            litrosDif = 0;
+        } 
+        else if (ecm === 0 && filled === 0) {
+            return alert("Ingresa los datos de combustible.");
+        }
+        else {
+            finalResult = ((filled - ecm) / ecm) * 100;
+        }
+
+        data[idx] = {
+            ...data[idx],
+            dateIn: new Date().toLocaleString(),
+            km: document.getElementById('ret-km').value || '-',
+            hrs: document.getElementById('ret-hrs').value || '-',
+            idle: document.getElementById('ret-idle').value || '-',
+            vel: document.getElementById('ret-vel').value || '-',
+            rpm: document.getElementById('ret-rpm').value || '-',
+            ecm: ecm, 
+            filled: filled,
+            difLitros: litrosDif,
+            dif: (currentRecord.type === 'enganche') ? '0.00' : finalResult.toFixed(2),
+            status: 'CERRADO'
+        };
+
+        localStorage.setItem(`data_v4_${currentOp}`, JSON.stringify(data));
+        showScreen('details');
+        renderTable();
+        
+        ['ret-km', 'ret-hrs', 'ret-idle', 'ret-vel', 'ret-rpm', 'ret-ecm', 'ret-filled'].forEach(id => document.getElementById(id).value = '');
     }
-    else {
-        // FÓRMULA ESTÁNDAR: ((Real - Esperado) / Esperado) * 100
-        // Esto te dará el porcentaje real de diferencia.
-        finalResult = ((filled - ecm) / ecm) * 100;
+
+    function deleteTrip(id) { 
+        if(confirm("¿Eliminar registro?")) { 
+            let data = JSON.parse(localStorage.getItem(`data_v4_${currentOp}`)); 
+            data = data.filter(x => x.id !== id); 
+            localStorage.setItem(`data_v4_${currentOp}`, JSON.stringify(data)); 
+            renderTable(); 
+        } 
     }
-
-    data[idx] = {
-        ...data[idx],
-        dateIn: new Date().toLocaleString(),
-        km: document.getElementById('ret-km').value || '-',
-        hrs: document.getElementById('ret-hrs').value || '-',
-        idle: document.getElementById('ret-idle').value || '-',
-        vel: document.getElementById('ret-vel').value || '-',
-        rpm: document.getElementById('ret-rpm').value || '-',
-        ecm: ecm, 
-        filled: filled,
-        difLitros: litrosDif,
-        dif: (currentRecord.type === 'enganche') ? '0.00' : finalResult.toFixed(2),
-        status: 'CERRADO'
-    };
-
-    localStorage.setItem(`data_v4_${currentOp}`, JSON.stringify(data));
-    showScreen('details');
-    renderTable();
     
-    ['ret-km', 'ret-hrs', 'ret-idle', 'ret-vel', 'ret-rpm', 'ret-ecm', 'ret-filled'].forEach(id => document.getElementById(id).value = '');
-}
-
-    function deleteTrip(id) { if(confirm("¿Eliminar registro?")) { let data = JSON.parse(localStorage.getItem(`data_v4_${currentOp}`)); data = data.filter(x => x.id !== id); localStorage.setItem(`data_v4_${currentOp}`, JSON.stringify(data)); renderTable(); } }
-    
-    function clearAllData() { if(confirm("¿Borrar toda la bitácora de este operador?")) { localStorage.setItem(`data_v4_${currentOp}`, JSON.stringify([])); renderTable(); } }
+    function clearAllData() { 
+        if(confirm("¿Borrar toda la bitácora de este operador?")) { 
+            localStorage.setItem(`data_v4_${currentOp}`, JSON.stringify([])); 
+            renderTable(); 
+        } 
+    }
 
     function downloadCSV() {
         const data = JSON.parse(localStorage.getItem(`data_v4_${currentOp}`)) || [];
